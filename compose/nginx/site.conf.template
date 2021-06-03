@@ -1,0 +1,59 @@
+upstream django {
+    server django:3300;
+}
+
+server {
+    listen 80;
+    server_name ${NGINX_SERVER_NAME};
+
+    access_log /dev/stdout combined buffer=32k flush=1m;
+    error_log /dev/stderr;
+
+    client_max_body_size 1g;
+    charset utf-8;
+    keepalive_timeout 60;
+
+    root /app;
+    set $static_root $document_root/static;
+
+    location / {
+        root  $static_root;
+        try_files $uri $uri/ /index.html;
+
+    }
+
+    location /static {
+        autoindex on;
+        alias /app/static/;
+    }
+
+    location /media {
+        autoindex on;
+        alias /app/src/media/;
+    }
+
+    location /.git/ {
+        deny all;
+    }
+
+    location /robots.txt {
+        alias $static_root/robots.txt;
+    }
+
+    location /admin {
+        include uwsgi_params;
+        default_type  text/html;
+        uwsgi_pass django;
+        uwsgi_param HTTP_X_FORWARDED_PROTOCOL 'https';
+    }
+
+    location /api {
+        include uwsgi_params;
+        default_type  text/html;
+        uwsgi_pass django;
+        uwsgi_param HTTP_X_FORWARDED_PROTOCOL 'https';
+
+        # switch off the basic-auth
+        auth_basic off;
+    }
+}

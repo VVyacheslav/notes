@@ -1,0 +1,71 @@
+version: "3.7"
+
+x-django-containers: &django-containers
+  user: www-data
+  build:
+    context: .
+    dockerfile: compose/django/Dockerfile
+  image: globaldots/django
+  restart: unless-stopped
+  volumes:
+    - "${MEDIA_VOLUME:-media-volume}:/app/src/media:rw"
+  environment:
+    - DEBUG
+    - LOG_LEVEL
+    - ALLOWED_HOSTS
+  env_file:
+    - .env
+
+services:
+  # Service commands (migrations, updates, etc)
+  service:
+    <<: *django-containers
+    command: /app/start-service.sh
+    container_name: globaldots-service
+    restart: "on-failure"
+    volumes:
+      - "${MEDIA_VOLUME:-media-volume}:/app/media:rw"
+
+  # Application
+  django:
+    <<: *django-containers
+    command: /app/start-django-uwsgi.sh
+    container_name: globaldots-django
+    expose:
+      - "3100"
+    depends_on:
+      - service
+      - database
+
+  database:
+    image: postgres:11.1
+    container_name: globaldots-database
+    expose:
+        - "5432"
+    env_file:
+      - .env
+
+  nginx:
+    image: globaldots/nginx
+    build:
+      context: .
+      dockerfile: compose/nginx/Dockerfile
+    container_name: globaldots-nginx
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+      - "443:443"
+    depends_on:
+      - django
+    volumes:
+      - "${MEDIA_VOLUME:-media-volume}:/app/src/media:rw"
+    env_file:
+      - .env
+
+networks:
+  default:
+    name: globaldots
+
+volumes:
+  media-volume:
+  pgdata:
